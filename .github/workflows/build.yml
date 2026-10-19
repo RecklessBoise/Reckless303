@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -B build -G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DACID303_COPY_AFTER_BUILD=OFF
+      - name: Build
+        run: cmake --build build --config Release --target Acid303_VST3 Acid303_AU Acid303_Standalone -- -quiet
+      - name: Package
+        run: |
+          mkdir dist
+          cp -R build/Acid303_artefacts/Release/VST3/Acid303.vst3 dist/
+          cp -R build/Acid303_artefacts/Release/AU/Acid303.component dist/
+          cp -R build/Acid303_artefacts/Release/Standalone/Acid303.app dist/
+          codesign --force --deep -s - dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Acid303-macOS
+          path: dist
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -B build -DACID303_COPY_AFTER_BUILD=OFF
+      - name: Build
+        run: cmake --build build --config Release --target Acid303_VST3 Acid303_Standalone
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Acid303-Windows
+          path: |
+            build/Acid303_artefacts/Release/VST3/Acid303.vst3
+            build/Acid303_artefacts/Release/Standalone/Acid303.exe
