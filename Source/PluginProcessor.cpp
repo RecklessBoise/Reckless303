@@ -7,9 +7,9 @@ namespace
 constexpr int baseNote = 36; // C2: the lowest key of the TB-303 keyboard (without DOWN)
 }
 
-Acid303Processor::Acid303Processor()
+Reckless303Processor::Reckless303Processor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "Acid303", createLayout())
+      apvts (*this, nullptr, "Reckless303", createLayout())
 {
     for (auto& s : steps)
         s.store (acid::Step().pack());
@@ -18,9 +18,9 @@ Acid303Processor::Acid303Processor()
     presets->loadPreset (0);
 }
 
-Acid303Processor::~Acid303Processor() = default;
+Reckless303Processor::~Reckless303Processor() = default;
 
-juce::AudioProcessorValueTreeState::ParameterLayout Acid303Processor::createLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout Reckless303Processor::createLayout()
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout layout;
@@ -54,17 +54,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout Acid303Processor::createLayo
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::mode, 1 }, "Mode",
                                                         StringArray { "MIDI", "Pattern", "Key Trig" }, ModePattern));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ParamID::run, 1 }, "Run", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ParamID::sync, 1 }, "Host Sync", true));
 
     return layout;
 }
 
-bool Acid303Processor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool Reckless303Processor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto out = layouts.getMainOutputChannelSet();
     return out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo();
 }
 
-void Acid303Processor::prepareToPlay (double sr, int)
+void Reckless303Processor::prepareToPlay (double sr, int)
 {
     sampleRate = sr;
     voice.prepare (sr);
@@ -75,7 +76,7 @@ void Acid303Processor::prepareToPlay (double sr, int)
     heldNotes.clear();
 }
 
-void Acid303Processor::updateVoiceParams()
+void Reckless303Processor::updateVoiceParams()
 {
     auto get = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
 
@@ -92,7 +93,7 @@ void Acid303Processor::updateVoiceParams()
     voice.setParams (p);
 }
 
-acid::Pattern Acid303Processor::getPattern() const
+acid::Pattern Reckless303Processor::getPattern() const
 {
     acid::Pattern p;
     p.length = patternLength.load();
@@ -101,14 +102,14 @@ acid::Pattern Acid303Processor::getPattern() const
     return p;
 }
 
-void Acid303Processor::setPattern (const acid::Pattern& p)
+void Reckless303Processor::setPattern (const acid::Pattern& p)
 {
     for (int i = 0; i < acid::maxSteps; ++i)
         setStep (i, p.steps[(size_t) i]);
     setPatternLength (p.length);
 }
 
-void Acid303Processor::triggerStep (int index)
+void Reckless303Processor::triggerStep (int index)
 {
     const int len = patternLength.load();
     const auto st = getStep (index);
@@ -143,7 +144,7 @@ void Acid303Processor::triggerStep (int index)
     }
 }
 
-void Acid303Processor::handleMidi (const juce::MidiMessage& m, int mode)
+void Reckless303Processor::handleMidi (const juce::MidiMessage& m, int mode)
 {
     if (m.isNoteOn())
     {
@@ -186,7 +187,7 @@ void Acid303Processor::handleMidi (const juce::MidiMessage& m, int mode)
     }
 }
 
-void Acid303Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+void Reckless303Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
 
@@ -206,26 +207,43 @@ void Acid303Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         transpose = 0;
     }
 
-    bool hostPlaying = false;
+    const bool syncParam = apvts.getRawParameterValue (ParamID::sync)->load() > 0.5f;
+
+    bool hostPlaying = false, hostHasBpm = false, hostHasPosition = false;
     double hostBpm = knobBpm, hostPpq = 0.0;
 
     if (auto* ph = getPlayHead())
     {
         if (auto pos = ph->getPosition())
         {
-            if (auto bpm = pos->getBpm())
+            hostPlaying = pos->getIsPlaying();
+
+            if (auto bpm = pos->getBpm(); bpm.hasValue() && *bpm > 1.0)
+            {
                 hostBpm = *bpm;
+                hostHasBpm = true;
+            }
 
             if (auto ppq = pos->getPpqPosition())
             {
                 hostPpq = *ppq;
-                hostPlaying = pos->getIsPlaying();
+                hostHasPosition = true;
             }
         }
     }
 
-    const double bpm = hostPlaying ? hostBpm : knobBpm;
+    // SYNC on: the host tempo drives the sequencer (even while stopped) and,
+    // while the host plays, steps are locked to its bar/beat position.
+    // SYNC off: the TEMPO knob drives a free clock that still starts and
+    // stops with the host transport.
+    const bool followHostTempo = syncParam && hostHasBpm;
+    const bool lockToHost = syncParam && hostPlaying && hostHasPosition;
+    const double bpm = followHostTempo ? hostBpm : knobBpm;
     const double stepsPerSample = bpm / 60.0 * 4.0 / sampleRate;
+
+    currentBpm.store (bpm);
+    hostIsPlaying.store (hostPlaying);
+    tempoFromHost.store (followHostTempo);
 
     auto* left  = buffer.getWritePointer (0);
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
@@ -248,7 +266,7 @@ void Acid303Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
                 }
 
                 double absPos;
-                if (hostPlaying)
+                if (lockToHost)
                 {
                     absPos = hostPpq * 4.0 + i * stepsPerSample;
                 }
@@ -304,12 +322,12 @@ void Acid303Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 }
 
 //==============================================================================
-int Acid303Processor::getNumPrograms()                      { return juce::jmax (1, presets->getNumFactoryPresets()); }
-int Acid303Processor::getCurrentProgram()                   { return juce::jmax (0, presets->getCurrentIndex()); }
-void Acid303Processor::setCurrentProgram (int index)        { presets->loadPreset (index); }
-const juce::String Acid303Processor::getProgramName (int i) { return presets->getPresetName (i); }
+int Reckless303Processor::getNumPrograms()                      { return juce::jmax (1, presets->getNumFactoryPresets()); }
+int Reckless303Processor::getCurrentProgram()                   { return juce::jmax (0, presets->getCurrentIndex()); }
+void Reckless303Processor::setCurrentProgram (int index)        { presets->loadPreset (index); }
+const juce::String Reckless303Processor::getProgramName (int i) { return presets->getPresetName (i); }
 
-void Acid303Processor::getStateInformation (juce::MemoryBlock& destData)
+void Reckless303Processor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("pattern", getPattern().toString(), nullptr);
@@ -320,7 +338,7 @@ void Acid303Processor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void Acid303Processor::setStateInformation (const void* data, int sizeInBytes)
+void Reckless303Processor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
@@ -338,12 +356,12 @@ void Acid303Processor::setStateInformation (const void* data, int sizeInBytes)
     }
 }
 
-juce::AudioProcessorEditor* Acid303Processor::createEditor()
+juce::AudioProcessorEditor* Reckless303Processor::createEditor()
 {
-    return new Acid303Editor (*this);
+    return new Reckless303Editor (*this);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new Acid303Processor();
+    return new Reckless303Processor();
 }

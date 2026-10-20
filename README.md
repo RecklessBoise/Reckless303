@@ -1,8 +1,8 @@
-# Acid303
+# Reckless303
 
 A TB-303 style bassline synthesizer and step sequencer, as **VST3**, **AU** and **Standalone**, built with [JUCE 8](https://juce.com).
 
-![Acid303](docs/screenshot.png)
+![Reckless303](docs/screenshot.png)
 
 > Independent emulation inspired by the Roland TB-303 Bass Line. Not affiliated with or endorsed by Roland Corporation.
 
@@ -25,7 +25,7 @@ A TB-303 style bassline synthesizer and step sequencer, as **VST3**, **AU** and 
 **Presets**
 - **152 factory presets**: 52 hand-programmed (Classic, Squelch, Bass, Lead, Dark, Distorted) + 100 generated
 - **RANDOM**: generate a new sound + pattern (sound-only / pattern-only from the preset menu)
-- **SAVE** / **DEL** user presets (`~/Library/Application Support/Acid303/Presets/*.acid303`, plain XML)
+- **SAVE** / **DEL** user presets (`~/Library/Application Support/Reckless303/Presets/*.reckless303`, plain XML)
 - **Like** (heart) any preset, browse liked only with **FAVS**, or open the *Liked* submenu
 
 **Interface**
@@ -35,7 +35,7 @@ A TB-303 style bassline synthesizer and step sequencer, as **VST3**, **AU** and 
 ## Install (macOS)
 
 Build from source (below); the build copies the plugins to
-`~/Library/Audio/Plug-Ins/VST3/Acid303.vst3` and `~/Library/Audio/Plug-Ins/Components/Acid303.component`.
+`~/Library/Audio/Plug-Ins/VST3/Reckless303.vst3` and `~/Library/Audio/Plug-Ins/Components/Reckless303.component`.
 
 CI builds (macOS universal + Windows VST3) are attached to each GitHub Actions run as artifacts.
 They are unsigned: on macOS run `xattr -dr com.apple.quarantine <plugin>` after copying.
@@ -45,8 +45,8 @@ They are unsigned: on macOS run `xattr -dr com.apple.quarantine <plugin>` after 
 Requirements: CMake ≥ 3.22, a C++17 compiler (Xcode / Command Line Tools on macOS, MSVC on Windows).
 
 ```bash
-git clone --recursive https://github.com/RecklessBoise/Acid303.git
-cd Acid303
+git clone --recursive https://github.com/RecklessBoise/Reckless303.git
+cd Reckless303
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
@@ -56,9 +56,9 @@ Universal macOS binary: add `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"`.
 Offline check tool (UI snapshot + audio render, no host needed):
 
 ```bash
-cmake -B build -DACID303_BUILD_TOOLS=ON
-cmake --build build --target Acid303RenderTool
-build/Acid303RenderTool_artefacts/Release/Acid303RenderTool out
+cmake -B build -DRECKLESS303_BUILD_TOOLS=ON
+cmake --build build --target Reckless303RenderTool
+build/Reckless303RenderTool_artefacts/Release/Reckless303RenderTool out
 ```
 
 ## Pattern text format

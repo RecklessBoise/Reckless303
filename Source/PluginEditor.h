@@ -17,7 +17,7 @@ public:
     static constexpr int designWidth = 1200;
     static constexpr int designHeight = 640;
 
-    explicit MainPanel (Acid303Processor&);
+    explicit MainPanel (Reckless303Processor&);
     ~MainPanel() override;
 
     void paint (juce::Graphics&) override;
@@ -40,7 +40,7 @@ private:
     void paintLabel (juce::Graphics&, const juce::String&, juce::Rectangle<float>, float size = 12.5f,
                      juce::Colour colour = acid::Palette::ink, juce::Justification j = juce::Justification::centred);
 
-    Acid303Processor& processor;
+    Reckless303Processor& processor;
 
     juce::Slider tuning, cutoff, resonance, envMod, decay, accent, tempo, drive, volume, mode;
     acid::SlideSwitch waveform;
@@ -50,7 +50,9 @@ private:
     std::array<std::unique_ptr<acid::KeyCap>, 13> keys;
     acid::KeyCap downKey { "DOWN", true }, upKey { "UP", true }, accentKey { "ACCENT", true }, slideKey { "SLIDE", true };
     acid::KeyCap backKey { "BACK", false }, nextKey { "NEXT", false }, clearKey { "CLEAR", false };
-    acid::KeyCap runKey { "RUN", true }, timeKey { "TIME", false };
+    acid::KeyCap runKey { "RUN", true }, timeKey { "TIME", false }, syncKey { "SYNC", true };
+    std::unique_ptr<ButtonAttachment> syncAttachment;
+    juce::String bpmText;
     juce::TextButton lenDown { "-" }, lenUp { "+" };
     acid::StepRow stepRow;
     acid::PresetBar presetBar;
@@ -66,21 +68,21 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainPanel)
 };
 
-class Acid303Editor : public juce::AudioProcessorEditor
+class Reckless303Editor : public juce::AudioProcessorEditor
 {
 public:
-    explicit Acid303Editor (Acid303Processor&);
-    ~Acid303Editor() override;
+    explicit Reckless303Editor (Reckless303Processor&);
+    ~Reckless303Editor() override;
 
     void resized() override;
 
 private:
     void showSizeMenu();
 
-    Acid303Processor& audioProcessor;
+    Reckless303Processor& audioProcessor;
     acid::LookAndFeel303 lnf;
     juce::TooltipWindow tooltips { this, 600 };
     MainPanel panel;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Acid303Editor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Reckless303Editor)
 };

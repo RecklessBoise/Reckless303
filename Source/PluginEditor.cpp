@@ -31,10 +31,11 @@ bool isBlack (int note)
 const Rectangle<float> infoLcd { 838.0f, 378.0f, 258.0f, 54.0f };
 const Rectangle<float> lenLcd { 70.0f, 592.0f, 54.0f, 28.0f };
 const Rectangle<float> timeLeds { 180.0f, 380.0f, 90.0f, 70.0f };
+const Rectangle<float> bpmLcd { 84.0f, 313.0f, 92.0f, 20.0f };
 } // namespace
 
 //==============================================================================
-MainPanel::MainPanel (Acid303Processor& p)
+MainPanel::MainPanel (Reckless303Processor& p)
     : processor (p), presetBar (p.getPresetManager())
 {
     setupKnob (tuning, ParamID::tuning);
@@ -65,8 +66,13 @@ MainPanel::MainPanel (Acid303Processor& p)
         key->onClick = [this, k] { editSelected ([k] (Step& s) { s.note = k; s.time = acid::Time::Note; }); };
     }
 
-    for (auto* b : { &downKey, &upKey, &accentKey, &slideKey, &backKey, &nextKey, &clearKey, &runKey, &timeKey })
+    for (auto* b : { &downKey, &upKey, &accentKey, &slideKey, &backKey, &nextKey, &clearKey, &runKey, &timeKey, &syncKey })
         addAndMakeVisible (b);
+
+    syncKey.setClickingTogglesState (true);
+    syncAttachment = std::make_unique<ButtonAttachment> (processor.apvts, ParamID::sync, syncKey);
+    syncKey.setTooltip ("Host sync: follow the tempo and bar position of your DAW (Ableton, FL Studio, Logic...). "
+                        "Off: the TEMPO knob sets the speed. In both cases the pattern starts when you press play in the DAW.");
     addAndMakeVisible (lenDown);
     addAndMakeVisible (lenUp);
     addAndMakeVisible (stepRow);
@@ -151,7 +157,8 @@ void MainPanel::layout()
 
     // Middle row.
     tempo.setBounds (65, 182, 130, 130);
-    drive.setBounds (228, 197, 100, 100);
+    syncKey.setBounds (200, 198, 52, 84);
+    drive.setBounds (262, 200, 92, 92);
     mode.setBounds (372, 185, 124, 124);
     presetBar.setBounds (585, 206, 395, 94);
     volume.setBounds (1035, 182, 130, 130);
@@ -268,6 +275,17 @@ void MainPanel::timerCallback()
     accentKey.setLed (sel.accent);
     slideKey.setLed (sel.slide);
     runKey.setLed (running);
+    syncKey.setLed (syncKey.getToggleState());
+
+    // Tempo readout; the knob is dimmed while the DAW tempo is in charge.
+    const bool fromHost = processor.isTempoFromHost();
+    tempo.setAlpha (fromHost ? 0.45f : 1.0f);
+    const auto newBpm = String (processor.getCurrentBpm(), 1) + (fromHost ? " HOST" : " BPM");
+    if (newBpm != bpmText)
+    {
+        bpmText = newBpm;
+        repaint (bpmLcd.expanded (4.0f).getSmallestIntegerContainer());
+    }
 
     const auto info = String (selectedStep) + "/" + String (pattern.length) + "/" + String (sel.pack());
     if (info != lastInfo)
@@ -332,8 +350,8 @@ void MainPanel::paint (Graphics& g)
     }
 
     g.setColour (Palette::ink);
-    g.setFont (logoFont (42.0f));
-    g.drawText ("ACID-303", Rectangle<float> (30, 92, 270, 50), Justification::centredLeft);
+    g.setFont (logoFont (34.0f));
+    g.drawText ("RECKLESS 303", Rectangle<float> (30, 92, 270, 50), Justification::centredLeft);
 
     g.setColour (Palette::ink.withAlpha (0.85f));
     g.fillRect (316.0f, 26.0f, 2.0f, 104.0f);
@@ -365,7 +383,13 @@ void MainPanel::paint (Graphics& g)
     paintLabel (g, "SLOW", { 52, 300, 60, 12 }, 9.5f, Palette::inkSoft);
     paintLabel (g, "FAST", { 150, 300, 60, 12 }, 9.5f, Palette::inkSoft);
 
-    paintLabel (g, "DRIVE", { 228, 175, 100, 16 });
+    g.setColour (Palette::lcd);
+    g.fillRoundedRectangle (bpmLcd, 3.0f);
+    paintLabel (g, bpmText, bpmLcd, 12.0f, Palette::lcdText);
+
+    paintLabel (g, "HOST", { 196, 166, 60, 13 }, 10.0f);
+    paintLabel (g, "SYNC", { 196, 179, 60, 13 }, 10.0f);
+    paintLabel (g, "DRIVE", { 258, 178, 100, 16 });
 
     paintLabel (g, "MODE", { 372, 162, 124, 16 });
     {
@@ -512,7 +536,7 @@ void MainPanel::paintBottomSection (Graphics& g)
 }
 
 //==============================================================================
-Acid303Editor::Acid303Editor (Acid303Processor& p)
+Reckless303Editor::Reckless303Editor (Reckless303Processor& p)
     : AudioProcessorEditor (&p), audioProcessor (p), panel (p)
 {
     setLookAndFeel (&lnf);
@@ -530,13 +554,13 @@ Acid303Editor::Acid303Editor (Acid303Processor& p)
     setSize (w, roundToInt (w / ratio));
 }
 
-Acid303Editor::~Acid303Editor()
+Reckless303Editor::~Reckless303Editor()
 {
     tooltips.setLookAndFeel (nullptr);
     setLookAndFeel (nullptr);
 }
 
-void Acid303Editor::resized()
+void Reckless303Editor::resized()
 {
     const float scale = (float) getWidth() / (float) MainPanel::designWidth;
     panel.setTransform (AffineTransform::scale (scale));
@@ -544,7 +568,7 @@ void Acid303Editor::resized()
     audioProcessor.editorWidth.store (getWidth());
 }
 
-void Acid303Editor::showSizeMenu()
+void Reckless303Editor::showSizeMenu()
 {
     const float sizes[] = { 0.5f, 0.65f, 0.75f, 0.85f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f };
     PopupMenu m;
@@ -555,7 +579,7 @@ void Acid303Editor::showSizeMenu()
         m.addItem (i + 1, String (roundToInt (sizes[i] * 100.0f)) + " %", true, std::abs (getWidth() - w) < 4);
     }
 
-    SafePointer<Acid303Editor> safe (this);
+    SafePointer<Reckless303Editor> safe (this);
     m.showMenuAsync (PopupMenu::Options(), [safe, sizes] (int r)
     {
         if (safe == nullptr || r <= 0)

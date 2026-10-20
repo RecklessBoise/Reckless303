@@ -23,15 +23,16 @@ inline constexpr const char* volume    = "volume";
 inline constexpr const char* tempo     = "tempo";
 inline constexpr const char* mode      = "mode";
 inline constexpr const char* run       = "run";
+inline constexpr const char* sync      = "sync";
 } // namespace ParamID
 
-class Acid303Processor : public juce::AudioProcessor
+class Reckless303Processor : public juce::AudioProcessor
 {
 public:
     enum Mode { ModeMidi = 0, ModePattern = 1, ModeKeyTrig = 2 };
 
-    Acid303Processor();
-    ~Acid303Processor() override;
+    Reckless303Processor();
+    ~Reckless303Processor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -67,6 +68,11 @@ public:
     int getPlayingStep() const { return playingStep.load(); }
     bool isSequencerRunning() const { return seqRunning.load(); }
 
+    // Tempo actually driving the sequencer, and whether the host transport is rolling.
+    double getCurrentBpm() const { return currentBpm.load(); }
+    bool isHostPlaying() const { return hostIsPlaying.load(); }
+    bool isTempoFromHost() const { return tempoFromHost.load(); }
+
     juce::AudioProcessorValueTreeState apvts;
     PresetManager& getPresetManager() { return *presets; }
 
@@ -85,6 +91,8 @@ private:
     std::atomic<int> patternLength { 16 };
     std::atomic<int> playingStep { -1 };
     std::atomic<bool> seqRunning { false };
+    std::atomic<double> currentBpm { 125.0 };
+    std::atomic<bool> hostIsPlaying { false }, tempoFromHost { false };
 
     // Sequencer state (audio thread only).
     double internalPos    = 0.0; // position in 16th steps
@@ -102,5 +110,5 @@ private:
 
     std::unique_ptr<PresetManager> presets;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Acid303Processor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Reckless303Processor)
 };

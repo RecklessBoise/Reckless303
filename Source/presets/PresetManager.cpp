@@ -8,10 +8,10 @@ namespace
 const char* const kPresetParams[] = { ParamID::tuning, ParamID::cutoff, ParamID::resonance, ParamID::envMod,
                                       ParamID::decay,  ParamID::accent, ParamID::waveform,  ParamID::drive };
 
-const juce::String kExtension = ".acid303";
+const juce::String kExtension = ".reckless303";
 } // namespace
 
-PresetManager::PresetManager (Acid303Processor& p) : processor (p)
+PresetManager::PresetManager (Reckless303Processor& p) : processor (p)
 {
     factory = makeFactoryPresets();
     rescanUserPresets();
@@ -21,9 +21,9 @@ PresetManager::PresetManager (Acid303Processor& p) : processor (p)
 juce::File PresetManager::getDataDirectory()
 {
    #if JUCE_MAC
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Application Support/Acid303");
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Application Support/Reckless303");
    #else
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Acid303");
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Reckless303");
    #endif
 }
 
@@ -159,7 +159,7 @@ void PresetManager::rescanUserPresets()
     for (const auto& entry : juce::RangedDirectoryIterator (getUserPresetDirectory(), false, "*" + kExtension))
     {
         auto xml = juce::XmlDocument::parse (entry.getFile());
-        if (xml == nullptr || ! xml->hasTagName ("Acid303Preset"))
+        if (xml == nullptr || ! xml->hasTagName ("Reckless303Preset"))
             continue;
 
         PresetData d;
@@ -193,7 +193,7 @@ bool PresetManager::saveUserPreset (const juce::String& rawName)
     if (name.isEmpty())
         return false;
 
-    juce::XmlElement xml ("Acid303Preset");
+    juce::XmlElement xml ("Reckless303Preset");
     xml.setAttribute ("name", name);
     xml.setAttribute ("category", "User");
     xml.setAttribute ("pattern", processor.getPattern().toString());

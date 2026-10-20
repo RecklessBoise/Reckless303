@@ -3,7 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
 
-class Acid303Processor;
+class Reckless303Processor;
 
 struct PresetData
 {
@@ -25,7 +25,7 @@ class PresetManager : public juce::ChangeBroadcaster
 public:
     enum class RandomMode { All, Sound, Pattern };
 
-    explicit PresetManager (Acid303Processor&);
+    explicit PresetManager (Reckless303Processor&);
 
     int getNumPresets() const               { return (int) (factory.size() + user.size()); }
     int getNumFactoryPresets() const        { return (int) factory.size(); }
@@ -68,7 +68,7 @@ private:
     void saveFavorites() const;
     int step (int from, int delta) const;
 
-    Acid303Processor& processor;
+    Reckless303Processor& processor;
     std::vector<PresetData> factory, user;
     juce::StringArray favorites;
     bool favoritesOnly = false;

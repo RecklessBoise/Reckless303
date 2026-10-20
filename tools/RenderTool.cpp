@@ -1,6 +1,6 @@
 // Offline check tool: renders the front panel to PNG files and the
 // sequencer output to WAV files, without needing a host.
-//   Acid303RenderTool <output-dir>
+//   Reckless303RenderTool <output-dir>
 
 #include "PluginProcessor.h"
 #include "presets/PresetManager.h"
@@ -9,7 +9,7 @@
 
 using namespace juce;
 
-static void snapshot (Acid303Processor& proc, int width, const File& file)
+static void snapshot (Reckless303Processor& proc, int width, const File& file)
 {
     std::unique_ptr<AudioProcessorEditor> editor (proc.createEditor());
     editor->setSize (width, roundToInt (width * 640.0 / 1200.0));
@@ -25,7 +25,7 @@ static void snapshot (Acid303Processor& proc, int width, const File& file)
     std::cout << "wrote " << file.getFullPathName() << " (" << img.getWidth() << "x" << img.getHeight() << ")\n";
 }
 
-static bool renderAudio (Acid303Processor& proc, const File& file, int presetIndex, double seconds)
+static bool renderAudio (Reckless303Processor& proc, const File& file, int presetIndex, double seconds)
 {
     constexpr double sr = 44100.0;
     constexpr int block = 512;
@@ -75,19 +75,91 @@ static bool renderAudio (Acid303Processor& proc, const File& file, int presetInd
     return finite && peak > 0.01f && peak < 4.0f;
 }
 
+// Simulated DAW transport.
+struct FakeHost : AudioPlayHead
+{
+    double bpm = 140.0, ppq = 0.0;
+    bool playing = false;
+
+    Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo info;
+        info.setBpm (bpm);
+        info.setPpqPosition (ppq);
+        info.setIsPlaying (playing);
+        return info;
+    }
+};
+
+static bool checkHostSync (Reckless303Processor& proc)
+{
+    FakeHost host;
+    proc.getPresetManager().loadPreset (1); // 16-step pattern
+    proc.setPlayHead (&host);
+    proc.prepareToPlay (44100.0, 512);
+    proc.apvts.getParameter (ParamID::run)->setValueNotifyingHost (0.0f);
+    proc.apvts.getParameter (ParamID::mode)->setValueNotifyingHost (proc.apvts.getParameter (ParamID::mode)->convertTo0to1 (1.0f));
+
+    AudioBuffer<float> buf (2, 512);
+    MidiBuffer midi;
+    auto run = [&] (int blocks)
+    {
+        for (int i = 0; i < blocks; ++i)
+        {
+            proc.processBlock (buf, midi);
+            if (host.playing)
+                host.ppq += 512.0 / 44100.0 * host.bpm / 60.0;
+        }
+    };
+
+    bool ok = true;
+    auto expect = [&] (bool cond, const char* what) { std::cout << (cond ? "  ok   " : "  FAIL ") << what << "\n"; ok = ok && cond; };
+
+    proc.apvts.getParameter (ParamID::sync)->setValueNotifyingHost (1.0f);
+    run (4);
+    expect (std::abs (proc.getCurrentBpm() - 140.0) < 0.01, "sync on: follows host tempo while stopped");
+    expect (! proc.isSequencerRunning(), "host stopped: pattern stopped");
+
+    host.playing = true;
+    host.ppq = 8.0; // bar 3, beat 1
+    run (2);
+    expect (proc.isSequencerRunning(), "host play: pattern starts");
+    expect (proc.getPlayingStep() == 0, "sync on: locked to host bar position (step 1 on the bar)");
+
+    host.playing = false;
+    run (2);
+    expect (! proc.isSequencerRunning(), "host stop: pattern stops");
+
+    proc.apvts.getParameter (ParamID::sync)->setValueNotifyingHost (0.0f);
+    host.playing = true;
+    host.ppq = 8.75;
+    run (2);
+    expect (std::abs (proc.getCurrentBpm() - 125.0) < 0.01, "sync off: TEMPO knob drives the speed");
+    expect (proc.isSequencerRunning(), "sync off: still starts with host play");
+
+    host.playing = false;
+    run (2);
+    proc.apvts.getParameter (ParamID::sync)->setValueNotifyingHost (1.0f);
+    proc.setPlayHead (nullptr);
+    return ok;
+}
+
 int main (int argc, char** argv)
 {
     ScopedJuceInitialiser_GUI init;
     const File outDir (argc > 1 ? File::getCurrentWorkingDirectory().getChildFile (argv[1]) : File::getCurrentWorkingDirectory());
     outDir.createDirectory();
 
-    Acid303Processor proc;
+    Reckless303Processor proc;
     std::cout << "presets: " << proc.getPresetManager().getNumPresets()
               << " (factory " << proc.getPresetManager().getNumFactoryPresets() << ")\n";
 
     bool ok = true;
     for (int idx : { 1, 14, 24, 45, 60 })
         ok = renderAudio (proc, outDir.getChildFile ("preset_" + String (idx) + ".wav"), idx, 6.0) && ok;
+
+    std::cout << "host sync:\n";
+    ok = checkHostSync (proc) && ok;
 
     proc.getPresetManager().loadPreset (1);
     snapshot (proc, 1200, outDir.getChildFile ("ui_1200.png"));
