@@ -18,7 +18,9 @@ A TB-303 style bassline synthesizer and step sequencer, as **VST3**, **AU** and 
 
 **Sequencer**
 - 16 steps, 1–16 step length, per step: note (C..C'), **UP/DOWN** octave, **ACCENT**, **SLIDE**, time mode **NOTE / TIE / REST**
-- Synced to the host transport, or free-running with the **TEMPO** knob and **RUN/STOP**
+- Press play in your DAW (Ableton, FL Studio, Logic Pro, ...) and the pattern starts; stop and it stops
+- **HOST SYNC** (on by default): follows the DAW tempo and locks the steps to its bars. Off: the **TEMPO** knob sets the speed. The BPM readout shows which one is in charge
+- Without a DAW (Standalone), use **RUN/STOP** and the **TEMPO** knob
 - **MODE** switch: `MIDI` (play it from a keyboard; legato = slide, velocity ≥ 100 = accent), `PATTERN` (sequencer, incoming notes transpose it from C3), `KEY TRIG` (pattern plays while a key is held, transposed)
 - Right-click the step strip: set length, shift, randomize, clear, copy/paste pattern as text
 
